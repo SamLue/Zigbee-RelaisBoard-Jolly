@@ -11,6 +11,7 @@
 
 constexpr uint8_t RELAY_COUNT = 8;
 constexpr uint8_t BASE_ENDPOINT = BINARY_DEVICE_ENDPOINT_NUMBER;
+constexpr char FIRMWARE_VERSION[] = "0.0.1";
 
 // GPIOs – GPIO0 bewusst NICHT benutzt
 constexpr uint8_t relayPins[RELAY_COUNT] = {
@@ -33,10 +34,27 @@ ZigbeeLight zbLights[RELAY_COUNT] = {
   ZigbeeLight(BASE_ENDPOINT + 7),
 };
 
+void saveRelayState(uint8_t index, bool state) {
+  preferences.begin("relays", false);
+  char key[3] = {'r', (char)('0' + index), '\0'};
+  preferences.putBool(key, state);
+  preferences.end();
+}
+
+void restoreRelayStates() {
+  preferences.begin("relays", true);
+  for (int i = 0; i < RELAY_COUNT; i++) {
+    char key[3] = {'r', (char)('0' + i), '\0'};
+    bool state = preferences.getBool(key, false);
+    digitalWrite(relayPins[i], state ? LOW : HIGH);
+  }
+  preferences.end();
+}
+
 void relayChanged(int i, bool state) {
   digitalWrite(relayPins[i], state ? LOW : HIGH);
   Serial.printf("Relay %d switched %s\n", i+1, state ? "ON" : "OFF");
-
+  saveRelayState(i, state);
 }
 
 // Für jeden Relay-Callback ein Wrapper:
@@ -119,6 +137,7 @@ void setup() {
     zbLights[i].setManufacturerAndModel("sml.lkf", "JollyRelaisBoard");
 
   }
+  restoreRelayStates();
 
   // Callbacks registrieren
   zbLights[0].onLightChange(relay0);
@@ -182,9 +201,16 @@ void setup() {
     ESP.restart();
   }
   Serial.println("Connecting to network");
-  while (!Zigbee.connected()) {
-    Serial.print(".");
-    delay(100);
+  {
+    unsigned long connectStart = millis();
+    while (!Zigbee.connected()) {
+      Serial.print(".");
+      delay(100);
+      if (millis() - connectStart > 30000) {
+        Serial.println("\nZigbee connection timeout - rebooting...");
+        ESP.restart();
+      }
+    }
   }
   Serial.println();
 
@@ -197,16 +223,27 @@ void setup() {
     zbContactSwitchIn1.requestIASZoneEnroll();
   }
 
-  while (!zbContactSwitchIn1.enrolled()) {
-    Serial.print(".");
-    delay(100);
+  bool enrollmentSuccess = false;
+  {
+    unsigned long enrollStart = millis();
+    while (!zbContactSwitchIn1.enrolled()) {
+      Serial.print(".");
+      delay(100);
+      if (millis() - enrollStart > 30000) {
+        Serial.println("\nEnrollment timeout - continuing without IAS Zone enrollment");
+        break;
+      }
+    }
+    enrollmentSuccess = zbContactSwitchIn1.enrolled();
   }
   Serial.println();
-  Serial.println("Zigbee enrolled successfully!");
+  if (enrollmentSuccess) {
+    Serial.println("Zigbee enrolled successfully!");
+  }
 
   // Store ENROLLED flag only if this was a new enrollment (previous flag was false)
   // Skip writing if we just restored enrollment (flag was already true)
-  if (!enrolled) {
+  if (!enrolled && enrollmentSuccess) {
     preferences.begin("Zigbee", false);
     preferences.putBool("ENROLLED", true);  // set ENROLLED flag to true
     preferences.end();
@@ -215,17 +252,24 @@ void setup() {
 }
 
 void loop() {
-  // Checking pin for contactIn1 change
+  // Checking pin for contactIn1 change (with debouncing)
   static bool contactIn1 = false;
-  if (digitalRead(in1_pin) == HIGH && !contactIn1) {
-    // Update contact sensor value
-    Serial.println("IN1 changed to HIGH");
-    zbContactSwitchIn1.setOpen();
-    contactIn1 = true;
-  } else if (digitalRead(in1_pin) == LOW && contactIn1) {
-    Serial.println("IN1 changed to LOW");
-    zbContactSwitchIn1.setClosed();
-    contactIn1 = false;
+  static bool rawIn1 = false;
+  static unsigned long debounceIn1 = 0;
+  bool currentIn1 = digitalRead(in1_pin) == HIGH;
+  if (currentIn1 != rawIn1) {
+    rawIn1 = currentIn1;
+    debounceIn1 = millis();
+  }
+  if ((millis() - debounceIn1) >= 30 && currentIn1 != contactIn1) {
+    contactIn1 = currentIn1;
+    if (contactIn1) {
+      Serial.println("IN1 changed to HIGH");
+      zbContactSwitchIn1.setOpen();
+    } else {
+      Serial.println("IN1 changed to LOW");
+      zbContactSwitchIn1.setClosed();
+    }
   }
 
   // Checking pin for contactIn2 change
@@ -247,7 +291,7 @@ void loop() {
   if (digitalRead(button) == LOW) {  // Push button pressed
     // Key debounce handling
     delay(100);
-    int startTime = millis();
+    unsigned long startTime = millis();
     while (digitalRead(button) == LOW) {
       delay(50);
       if ((millis() - startTime) > 3000) {
@@ -260,6 +304,7 @@ void loop() {
         Serial.println("ENROLLED flag cleared from preferences");
         delay(1000);
         Zigbee.factoryReset();
+        break;
       }
     }
   }
