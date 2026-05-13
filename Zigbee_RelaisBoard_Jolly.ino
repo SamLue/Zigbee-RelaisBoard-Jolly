@@ -79,14 +79,14 @@ void setup() {
   restoreRelayStates();
 
   // Callbacks registrieren
-  zbLights[0].onLightChange(relayWrapper<0>);
-  zbLights[1].onLightChange(relayWrapper<1>);
-  zbLights[2].onLightChange(relayWrapper<2>);
-  zbLights[3].onLightChange(relayWrapper<3>);
-  zbLights[4].onLightChange(relayWrapper<4>);
-  zbLights[5].onLightChange(relayWrapper<5>);
-  zbLights[6].onLightChange(relayWrapper<6>);
-  zbLights[7].onLightChange(relayWrapper<7>);
+  zbLights[0].onLightChange(relayWrapper0);
+  zbLights[1].onLightChange(relayWrapper1);
+  zbLights[2].onLightChange(relayWrapper2);
+  zbLights[3].onLightChange(relayWrapper3);
+  zbLights[4].onLightChange(relayWrapper4);
+  zbLights[5].onLightChange(relayWrapper5);
+  zbLights[6].onLightChange(relayWrapper6);
+  zbLights[7].onLightChange(relayWrapper7);
 
   // Endpoints beim Zigbee-Core anmelden
   for (int i = 0; i < RELAY_COUNT; i++) {
