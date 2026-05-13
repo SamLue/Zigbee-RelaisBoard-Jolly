@@ -27,6 +27,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Q-03 (Compile-Fix)** Template-Funktion `relayWrapper<N>` aus dem `.ino` in `relay_helper.h` verschoben.
+  Die Arduino-IDE generiert automatisch Funktionsprototypen für alle Funktionen im `.ino` – bei
+  Template-Funktionen erzeugte das einen ungültigen Prototyp und den Compile-Fehler `exit status 1`.
+  Symbole in inkludierten `.h`-Dateien werden davon nicht berührt.
+
 ### Improved
 - **Q-01** `in1_pin` und `in2_pin` von `uint8_t` auf `constexpr uint8_t` geändert.
   Die Werte sind zur Compile-Zeit bekannt und unveränderlich – `constexpr` macht das explizit und verhindert versehentliche Schreibzugriffe.
@@ -36,3 +42,9 @@ All notable changes to this project will be documented in this file.
   `onLightChange()` der Espressif-Bibliothek erwartet einen raw function pointer (`void (*)(bool)`),
   Lambdas mit Capture sind daher nicht nutzbar. Stattdessen wird `template<uint8_t N> void relayWrapper(bool)`
   mit compile-time Index instanziiert – eine Funktion statt acht, ohne Laufzeit-Overhead.
+- **Q-04** Unbenutzte globale Variablen `in1Status` und `in2Status` entfernt.
+- **Q-05** Auskommentierter IN2-Code vollständig entfernt (Deklaration, Setup-Zeilen, Loop-Block).
+  IN2-Pin bleibt als `INPUT_PULLUP` konfiguriert für spätere Aktivierung (F-01).
+- **Q-06** RGB-LED-Logik in `rgb_status.h` ausgelagert (`kelvinToMireds`, `miredsToKelvin`,
+  `setRGBLight`, `setTempLight`, `identify`). Template-Wrapper in `relay_helper.h`.
+  Das Haupt-Sketch enthält nur noch Relay- und Zigbee-Kernlogik.
