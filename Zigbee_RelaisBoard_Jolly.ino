@@ -5,9 +5,9 @@
 #include "Zigbee.h"
 #include <Preferences.h>
 
-#define BINARY_DEVICE_ENDPOINT_NUMBER 1
-#define ZIGBEE_RGB_LIGHT_ENDPOINT 10
-#define CONTACT_SWITCH_ENDPOINT_NUMBER 11
+constexpr uint8_t BINARY_DEVICE_ENDPOINT_NUMBER = 1;
+constexpr uint8_t ZIGBEE_RGB_LIGHT_ENDPOINT     = 10;
+constexpr uint8_t CONTACT_SWITCH_ENDPOINT_NUMBER = 11;
 
 constexpr uint8_t RELAY_COUNT = 8;
 constexpr uint8_t BASE_ENDPOINT = BINARY_DEVICE_ENDPOINT_NUMBER;
@@ -18,8 +18,8 @@ constexpr uint8_t relayPins[RELAY_COUNT] = {
   1, 2, 3, 4, 5, 6, 7, 14
 };
 
-uint8_t in1_pin = 18;
-uint8_t in2_pin = 19;
+constexpr uint8_t in1_pin = 18;
+constexpr uint8_t in2_pin = 19;
 
 Preferences preferences;
 
