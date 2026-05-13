@@ -59,35 +59,20 @@ Nach einem Neustart werden alle Relais auf `HIGH` (AUS) gesetzt, unabhängig vom
 
 ## Code-Qualität
 
-### Q-01 · `in1_pin` / `in2_pin` sollten `constexpr` sein
-**Datei:** `Zigbee_RelaisBoard_Jolly.ino:20–21`
-```cpp
-uint8_t in1_pin = 18;
-uint8_t in2_pin = 19;
-```
-Diese Werte ändern sich nie. `constexpr uint8_t` macht die Absicht klar und verhindert versehentliche Änderungen.
+### ~~Q-01 · `in1_pin` / `in2_pin` sollten `constexpr` sein~~ ✓ Erledigt
+Umgesetzt in Commit `a985922`.
 
 ---
 
-### Q-02 · Endpoint-Nummern als `#define` statt `constexpr`
-**Datei:** `Zigbee_RelaisBoard_Jolly.ino:8–10`
-```cpp
-#define BINARY_DEVICE_ENDPOINT_NUMBER 1
-#define ZIGBEE_RGB_LIGHT_ENDPOINT 10
-#define CONTACT_SWITCH_ENDPOINT_NUMBER 11
-```
-Im C++-Teil sollten `constexpr uint8_t` bevorzugt werden: typsicher, debugbar, kein Präprozessor nötig.
+### ~~Q-02 · Endpoint-Nummern als `#define` statt `constexpr`~~ ✓ Erledigt
+Umgesetzt in Commit `a985922`.
 
 ---
 
-### Q-03 · Relay-Wrapper-Funktionen als Boilerplate
-**Datei:** `Zigbee_RelaisBoard_Jolly.ino:43–50`
-```cpp
-void relay0(bool state) { relayChanged(0, state); }
-// ... bis relay7
-```
-Acht identische Wrapper sind wartungsunfreundlich. Falls die API Lambdas ohne Capture unterstützt, können sie entfallen. Alternativ: ein Array von Funktionszeigern mit Template oder Index-Binding.
-*Hinweis: Hängt von der `ZigbeeLight::onLightChange`-API ab – prüfen, ob Lambdas unterstützt werden.*
+### ~~Q-03 · Relay-Wrapper-Funktionen als Boilerplate~~ ✓ Erledigt
+`onLightChange()` erwartet `void (*)(bool)` – Lambdas mit Capture nicht möglich.
+Gelöst mit `template<uint8_t N> void relayWrapper(bool)` (compile-time Index).
+Umgesetzt in diesem Commit.
 
 ---
 

@@ -57,15 +57,8 @@ void relayChanged(int i, bool state) {
   saveRelayState(i, state);
 }
 
-// Für jeden Relay-Callback ein Wrapper:
-void relay0(bool state) { relayChanged(0, state); }
-void relay1(bool state) { relayChanged(1, state); }
-void relay2(bool state) { relayChanged(2, state); }
-void relay3(bool state) { relayChanged(3, state); }
-void relay4(bool state) { relayChanged(4, state); }
-void relay5(bool state) { relayChanged(5, state); }
-void relay6(bool state) { relayChanged(6, state); }
-void relay7(bool state) { relayChanged(7, state); }
+template<uint8_t N>
+void relayWrapper(bool state) { relayChanged(N, state); }
 
 ZigbeeContactSwitch zbContactSwitchIn1 = ZigbeeContactSwitch(CONTACT_SWITCH_ENDPOINT_NUMBER);
 //ZigbeeContactSwitch zbContactSwitchIn2 = ZigbeeContactSwitch(CONTACT_SWITCH_ENDPOINT_NUMBER + 1);
@@ -139,15 +132,15 @@ void setup() {
   }
   restoreRelayStates();
 
-  // Callbacks registrieren
-  zbLights[0].onLightChange(relay0);
-  zbLights[1].onLightChange(relay1);
-  zbLights[2].onLightChange(relay2);
-  zbLights[3].onLightChange(relay3);
-  zbLights[4].onLightChange(relay4);
-  zbLights[5].onLightChange(relay5);
-  zbLights[6].onLightChange(relay6);
-  zbLights[7].onLightChange(relay7);
+  // Callbacks registrieren (Template instanziiert compile-time Index pro Relay)
+  zbLights[0].onLightChange(relayWrapper<0>);
+  zbLights[1].onLightChange(relayWrapper<1>);
+  zbLights[2].onLightChange(relayWrapper<2>);
+  zbLights[3].onLightChange(relayWrapper<3>);
+  zbLights[4].onLightChange(relayWrapper<4>);
+  zbLights[5].onLightChange(relayWrapper<5>);
+  zbLights[6].onLightChange(relayWrapper<6>);
+  zbLights[7].onLightChange(relayWrapper<7>);
 
   // Endpoints beim Zigbee-Core anmelden
   for (int i = 0; i < RELAY_COUNT; i++) {

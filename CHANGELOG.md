@@ -24,3 +24,15 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Firmware-Version `0.0.1` als `constexpr char FIRMWARE_VERSION[]` im Sketch definiert.
 - `BACKLOG.md` mit vollständiger Code-Review und Verbesserungsvorschlägen.
+
+## [Unreleased]
+
+### Improved
+- **Q-01** `in1_pin` und `in2_pin` von `uint8_t` auf `constexpr uint8_t` geändert.
+  Die Werte sind zur Compile-Zeit bekannt und unveränderlich – `constexpr` macht das explizit und verhindert versehentliche Schreibzugriffe.
+- **Q-02** Endpoint-Nummern von `#define` auf `constexpr uint8_t` umgestellt.
+  Typsicher, debugbar und kein Präprozessor-Namespace-Konflikt mehr möglich.
+- **Q-03** Acht identische Relay-Wrapper-Funktionen durch eine einzige Template-Funktion ersetzt.
+  `onLightChange()` der Espressif-Bibliothek erwartet einen raw function pointer (`void (*)(bool)`),
+  Lambdas mit Capture sind daher nicht nutzbar. Stattdessen wird `template<uint8_t N> void relayWrapper(bool)`
+  mit compile-time Index instanziiert – eine Funktion statt acht, ohne Laufzeit-Overhead.
