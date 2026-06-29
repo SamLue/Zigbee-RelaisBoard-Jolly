@@ -4,6 +4,7 @@
 
 #include "Zigbee.h"
 #include <Preferences.h>
+#include "esp_task_wdt.h"
 #include "relay_helper.h"
 #include "rgb_status.h"
 
@@ -15,6 +16,13 @@ constexpr uint8_t RELAY_COUNT    = 8;
 constexpr uint8_t BASE_ENDPOINT  = BINARY_DEVICE_ENDPOINT_NUMBER;
 constexpr char    FIRMWARE_VERSION[] = "0.0.1";
 
+// Timeouts / Intervalle
+constexpr uint32_t      ZIGBEE_CONNECT_TIMEOUT_MS = 30000;
+constexpr uint32_t      ENROLL_TIMEOUT_MS         = 30000;
+constexpr uint32_t      WDT_TIMEOUT_MS            = 60000;  // P-03: Hardware-Watchdog
+constexpr unsigned long CONN_CHECK_INTERVAL_MS    = 5000;   // P-02: Verbindungsueberwachung
+constexpr unsigned long DEBOUNCE_MS               = 30;     // Kontakteingang IN1
+
 // GPIOs – GPIO0 bewusst NICHT benutzt
 constexpr uint8_t relayPins[RELAY_COUNT] = {
   1, 2, 3, 4, 5, 6, 7, 14
@@ -24,6 +32,14 @@ constexpr uint8_t in1_pin = 18;
 constexpr uint8_t in2_pin = 19;
 
 Preferences preferences;
+
+// In-Memory-Cache der Relais-Zustaende (Quelle der Wahrheit fuer Restore + NVS-Schreibschutz)
+bool relayStates[RELAY_COUNT] = { false };
+
+// Kontakteingang IN1 – global, damit der Initialzustand in setup() gesetzt werden kann (P-05)
+bool          contactIn1  = false;
+bool          rawIn1      = false;
+unsigned long debounceIn1 = 0;
 
 ZigbeeLight zbLights[RELAY_COUNT] = {
   ZigbeeLight(BASE_ENDPOINT + 0),
@@ -48,6 +64,7 @@ void restoreRelayStates() {
   for (int i = 0; i < RELAY_COUNT; i++) {
     char key[3] = {'r', (char)('0' + i), '\0'};
     bool state = preferences.getBool(key, false);
+    relayStates[i] = state;
     digitalWrite(relayPins[i], state ? LOW : HIGH);
   }
   preferences.end();
@@ -56,7 +73,11 @@ void restoreRelayStates() {
 void relayChanged(int i, bool state) {
   digitalWrite(relayPins[i], state ? LOW : HIGH);
   Serial.printf("Relay %d switched %s\n", i + 1, state ? "ON" : "OFF");
-  saveRelayState(i, state);
+  // P-04: NVS nur bei tatsaechlicher Zustandsaenderung schreiben (Flash-Verschleiss)
+  if (relayStates[i] != state) {
+    relayStates[i] = state;
+    saveRelayState(i, state);
+  }
 }
 
 ZigbeeContactSwitch zbContactSwitchIn1 = ZigbeeContactSwitch(CONTACT_SWITCH_ENDPOINT_NUMBER);
@@ -133,13 +154,19 @@ void setup() {
     while (!Zigbee.connected()) {
       Serial.print(".");
       delay(100);
-      if (millis() - connectStart > 30000) {
+      if (millis() - connectStart > ZIGBEE_CONNECT_TIMEOUT_MS) {
         Serial.println("\nZigbee connection timeout - rebooting...");
         ESP.restart();
       }
     }
   }
   Serial.println();
+
+  // P-01: Zigbee-On/Off-Attribute mit den wiederhergestellten physischen Relais-Zustaenden
+  // synchronisieren, damit Home Assistant nach einem Reboot den realen Zustand anzeigt.
+  for (int i = 0; i < RELAY_COUNT; i++) {
+    zbLights[i].setLight(relayStates[i]);
+  }
 
   if (enrolled) {
     Serial.println("Device has been enrolled before - restoring IAS Zone enrollment");
@@ -155,7 +182,7 @@ void setup() {
     while (!zbContactSwitchIn1.enrolled()) {
       Serial.print(".");
       delay(100);
-      if (millis() - enrollStart > 30000) {
+      if (millis() - enrollStart > ENROLL_TIMEOUT_MS) {
         Serial.println("\nEnrollment timeout - continuing without IAS Zone enrollment");
         break;
       }
@@ -173,19 +200,52 @@ void setup() {
     preferences.end();
     Serial.println("ENROLLED flag saved to preferences");
   }
+
+  // P-05: Initialen Kontaktzustand einmalig melden und Loop-Status initialisieren,
+  // damit Home Assistant auch einen beim Booten bereits geschlossenen Kontakt kennt.
+  contactIn1 = digitalRead(in1_pin) == HIGH;
+  rawIn1     = contactIn1;
+  if (contactIn1) {
+    zbContactSwitchIn1.setOpen();
+  } else {
+    zbContactSwitchIn1.setClosed();
+  }
+
+  // P-03: Hardware-Watchdog aktivieren und Loop-Task ueberwachen.
+  // Erst hier, nachdem die blockierenden Warteschleifen (mit eigenem Timeout) durch sind.
+  esp_task_wdt_config_t wdt_config = {
+    .timeout_ms     = WDT_TIMEOUT_MS,
+    .idle_core_mask = 0,
+    .trigger_panic  = true,
+  };
+  esp_task_wdt_reconfigure(&wdt_config);
+  esp_task_wdt_add(NULL);
+  Serial.printf("Watchdog aktiv (%lu ms)\n", (unsigned long)WDT_TIMEOUT_MS);
 }
 
 void loop() {
-  // Kontakteingang IN1 mit Software-Debounce
-  static bool contactIn1 = false;
-  static bool rawIn1 = false;
-  static unsigned long debounceIn1 = 0;
+  esp_task_wdt_reset();  // P-03: Watchdog fuettern
+
+  // P-02: Zigbee-Verbindung ueberwachen und Statuswechsel protokollieren
+  static bool          wasConnected  = true;
+  static unsigned long lastConnCheck = 0;
+  if (millis() - lastConnCheck >= CONN_CHECK_INTERVAL_MS) {
+    lastConnCheck = millis();
+    bool nowConnected = Zigbee.connected();
+    if (nowConnected != wasConnected) {
+      wasConnected = nowConnected;
+      Serial.println(nowConnected ? "Zigbee-Verbindung wiederhergestellt"
+                                   : "Zigbee-Verbindung verloren!");
+    }
+  }
+
+  // Kontakteingang IN1 mit Software-Debounce (Status global, Initialwert in setup() gesetzt)
   bool currentIn1 = digitalRead(in1_pin) == HIGH;
   if (currentIn1 != rawIn1) {
     rawIn1 = currentIn1;
     debounceIn1 = millis();
   }
-  if ((millis() - debounceIn1) >= 30 && currentIn1 != contactIn1) {
+  if ((millis() - debounceIn1) >= DEBOUNCE_MS && currentIn1 != contactIn1) {
     contactIn1 = currentIn1;
     if (contactIn1) {
       Serial.println("IN1 changed to HIGH");

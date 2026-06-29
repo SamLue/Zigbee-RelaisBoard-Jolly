@@ -37,6 +37,32 @@ Template-Wrapper in `relay_helper.h`. Haupt-Sketch enthält nur noch Kern-Logik.
 
 ---
 
+## Produktiv-Härtung (Camper-Dauerbetrieb)
+
+### ~~P-01 · Zustands-Mismatch zwischen Relais und Zigbee-Attribut nach Reboot~~ ✓ Erledigt
+`restoreRelayStates()` setzte nur den physischen GPIO, nicht das Zigbee-On/Off-Attribut.
+Nach einem Stromausfall konnte Home Assistant ein Relais als AUS anzeigen, obwohl es real AN war.
+**Fix:** Nach Verbindungsaufbau wird `zbLights[i].setLight(relayStates[i])` aufgerufen.
+
+### ~~P-02 · Keine Verbindungsüberwachung in `loop()`~~ ✓ Erledigt
+`loop()` prüft `Zigbee.connected()` nun alle 5 s und protokolliert Statuswechsel
+(getrennt/wiederverbunden), z. B. bei Koordinator-Reboot oder Reichweitenverlust.
+
+### ~~P-03 · Kein Hardware-Watchdog~~ ✓ Erledigt
+Task-Watchdog (`esp_task_wdt`, 60 s) überwacht den Loop-Task und erzwingt bei einem Hänger
+einen Neustart. Wird erst nach den blockierenden Setup-Warteschleifen aktiviert.
+
+### ~~P-04 · NVS-Schreiblast / Flash-Verschleiß~~ ✓ Erledigt
+`relayChanged()` schrieb bei jedem `onLightChange` in NVS, auch ohne Zustandsänderung.
+**Fix:** In-Memory-Cache `relayStates[]`; Schreiben nur bei tatsächlicher Änderung.
+
+### ~~P-05 · Initialer Kontaktzustand wird nicht gemeldet~~ ✓ Erledigt
+Ein beim Booten bereits geschlossener Kontakt (IN1 LOW) wurde nie gemeldet.
+**Fix:** Nach Verbindungsaufbau wird der Initialzustand einmalig per `setOpen()`/`setClosed()`
+gesendet; die Loop-Status-Variablen sind global und werden in `setup()` initialisiert.
+
+---
+
 ## Features / Erweiterungen
 
 ### F-01 · IN2 aktivieren

@@ -28,6 +28,25 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **P-01** Zustands-Synchronisation Relais ↔ Zigbee-Attribut nach Reboot.
+  Nach dem Verbindungsaufbau werden die wiederhergestellten physischen Relais-Zustände per
+  `zbLights[i].setLight()` an das Zigbee-On/Off-Cluster gemeldet. Zuvor konnte Home Assistant
+  nach einem Stromausfall einen falschen Zustand anzeigen (Relais real AN, App AUS).
+- **P-05** Initialer Kontaktzustand von IN1 wird nach dem Verbindungsaufbau einmalig gemeldet.
+  Ein beim Booten bereits geschlossener Kontakt war zuvor in Home Assistant unbekannt.
+
+### Improved
+- **P-02** Verbindungsüberwachung im `loop()`: `Zigbee.connected()` wird alle 5 s geprüft,
+  Statuswechsel (getrennt/wiederverbunden) werden protokolliert. Relevant im mobilen Einsatz
+  (Koordinator-Reboot, Reichweitenverlust).
+- **P-03** Hardware-Watchdog (`esp_task_wdt`, 60 s) auf dem Loop-Task. Bei einem Hänger im
+  verbauten Zustand startet das Gerät selbstständig neu. Aktivierung erst nach den
+  blockierenden Setup-Warteschleifen (die ihren eigenen Timeout + Reboot haben).
+- **P-04** NVS-Schreibschutz: `relayChanged()` schreibt nur noch bei tatsächlicher
+  Zustandsänderung (In-Memory-Cache `relayStates[]`), schont den Flash bei häufig getakteten Lasten.
+- Timeouts und Intervalle als benannte `constexpr` statt Magic Numbers
+  (`ZIGBEE_CONNECT_TIMEOUT_MS`, `ENROLL_TIMEOUT_MS`, `WDT_TIMEOUT_MS`, `CONN_CHECK_INTERVAL_MS`, `DEBOUNCE_MS`).
+
 - **Q-03 (Compile-Fix)** Template-Funktion `relayWrapper<N>` aus dem `.ino` in `relay_helper.h` verschoben.
   Die Arduino-IDE generiert automatisch Funktionsprototypen für alle Funktionen im `.ino` – bei
   Template-Funktionen erzeugte das einen ungültigen Prototyp und den Compile-Fehler `exit status 1`.
